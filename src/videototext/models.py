@@ -17,3 +17,16 @@ class AppConfig:
     model_size: str = "base"
     compute_type: str = "int8"
     language: Optional[str] = None
+
+
+@dataclass
+class Segment:
+    start: float
+    end: float
+    text: str
+
+
+@dataclass
+class TranscriptionResult:
+    text: str
+    segments: list[Segment]

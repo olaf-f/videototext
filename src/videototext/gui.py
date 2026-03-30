@@ -8,8 +8,8 @@ from tkinter import ttk
 from tkinter.scrolledtext import ScrolledText
 
 from videototext.engine import run_ocr, run_transcribe_file, run_transcribe_url
-from videototext.exporter import export_docx, export_txt
-from videototext.models import AppConfig, UrlInput
+from videototext.exporter import export_docx, export_srt, export_txt
+from videototext.models import AppConfig, Segment, TranscriptionResult, UrlInput
 from videototext.utils import timestamp
 
 
@@ -17,7 +17,7 @@ class VideoToTextApp:
     def __init__(self, root: Tk) -> None:
         self.root = root
         self.root.title("VideoToText")
-        self.root.geometry("980x720")
+        self.root.geometry("980x740")
 
         self.image_path = StringVar()
         self.video_path = StringVar()
@@ -27,6 +27,12 @@ class VideoToTextApp:
         self.language = StringVar(value="")
 
         self.status = StringVar(value="Ready")
+        self.progress = StringVar(value="0%")
+
+        self._cancel_event: threading.Event | None = None
+        self._running = False
+        self.last_segments: list[Segment] = []
+
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -37,7 +43,16 @@ class VideoToTextApp:
         ttk.Combobox(top, textvariable=self.model_size, values=["tiny", "base", "small", "medium"], width=12).pack(side=LEFT, padx=4)
         ttk.Label(top, text="Language(optional)").pack(side=LEFT, padx=(12, 0))
         ttk.Entry(top, textvariable=self.language, width=14).pack(side=LEFT, padx=4)
-        ttk.Label(top, textvariable=self.status).pack(side=RIGHT)
+
+        self.cancel_btn = ttk.Button(top, text="取消任务", command=self.cancel_task, state="disabled")
+        self.cancel_btn.pack(side=RIGHT)
+        ttk.Label(top, textvariable=self.status).pack(side=RIGHT, padx=8)
+
+        progress_row = ttk.Frame(self.root, padding=(8, 0, 8, 6))
+        progress_row.pack(fill=X)
+        self.progressbar = ttk.Progressbar(progress_row, mode="determinate", maximum=100)
+        self.progressbar.pack(side=LEFT, fill=X, expand=True)
+        ttk.Label(progress_row, textvariable=self.progress).pack(side=LEFT, padx=8)
 
         tabs = ttk.Notebook(self.root)
         tabs.pack(fill=BOTH, expand=True, padx=8, pady=8)
@@ -63,6 +78,7 @@ class VideoToTextApp:
         btn_bar.pack(fill=X)
         ttk.Button(btn_bar, text="导出 TXT", command=self.export_txt_action).pack(side=LEFT)
         ttk.Button(btn_bar, text="导出 DOCX", command=self.export_docx_action).pack(side=LEFT, padx=8)
+        ttk.Button(btn_bar, text="导出 SRT", command=self.export_srt_action).pack(side=LEFT)
 
         log_frame = ttk.LabelFrame(self.root, text="日志", padding=8)
         log_frame.pack(fill=BOTH, expand=False, padx=8, pady=(0, 8))
@@ -74,14 +90,16 @@ class VideoToTextApp:
         row.pack(fill=X)
         ttk.Entry(row, textvariable=self.image_path).pack(side=LEFT, fill=X, expand=True)
         ttk.Button(row, text="选择图片", command=self.pick_image).pack(side=LEFT, padx=8)
-        ttk.Button(self.tab_image, text="开始 OCR", command=self.run_image).pack(anchor="w", pady=10)
+        self.btn_image = ttk.Button(self.tab_image, text="开始 OCR", command=self.run_image)
+        self.btn_image.pack(anchor="w", pady=10)
 
     def _build_video_tab(self) -> None:
         row = ttk.Frame(self.tab_video)
         row.pack(fill=X)
         ttk.Entry(row, textvariable=self.video_path).pack(side=LEFT, fill=X, expand=True)
         ttk.Button(row, text="选择视频", command=self.pick_video).pack(side=LEFT, padx=8)
-        ttk.Button(self.tab_video, text="开始转写", command=self.run_video).pack(anchor="w", pady=10)
+        self.btn_video = ttk.Button(self.tab_video, text="开始转写", command=self.run_video)
+        self.btn_video.pack(anchor="w", pady=10)
 
     def _build_url_tab(self) -> None:
         row1 = ttk.Frame(self.tab_url)
@@ -98,7 +116,16 @@ class VideoToTextApp:
         ttk.Label(self.tab_url, text="或粘贴 Cookie 文本").pack(anchor="w")
         self.cookie_text = ScrolledText(self.tab_url, height=8)
         self.cookie_text.pack(fill=BOTH, expand=True, pady=6)
-        ttk.Button(self.tab_url, text="开始链接转写", command=self.run_url).pack(anchor="w", pady=6)
+        self.btn_url = ttk.Button(self.tab_url, text="开始链接转写", command=self.run_url)
+        self.btn_url.pack(anchor="w", pady=6)
+
+    def _set_running(self, running: bool) -> None:
+        self._running = running
+        state = "disabled" if running else "normal"
+        self.btn_image.configure(state=state)
+        self.btn_video.configure(state=state)
+        self.btn_url.configure(state=state)
+        self.cancel_btn.configure(state="normal" if running else "disabled")
 
     def pick_image(self) -> None:
         path = filedialog.askopenfilename(filetypes=[("Image", "*.png;*.jpg;*.jpeg;*.webp")])
@@ -129,8 +156,24 @@ class VideoToTextApp:
         self.logs.configure(state="disabled")
         self.logs.see(END)
 
+    def _on_progress(self, message: str, percent: int) -> None:
+        self.root.after(0, lambda: self._apply_progress(message, percent))
+
+    def _apply_progress(self, message: str, percent: int) -> None:
+        p = max(0, min(100, int(percent)))
+        self.progressbar.configure(value=p)
+        self.progress.set(f"{p}%")
+        self.status.set(message)
+
     def run_worker(self, action_name: str, target) -> None:
-        self.status.set(f"Running: {action_name}")
+        if self._running:
+            messagebox.showwarning("提示", "已有任务在运行")
+            return
+
+        self.last_segments = []
+        self._cancel_event = threading.Event()
+        self._set_running(True)
+        self._apply_progress(f"Running: {action_name}", 1)
         self.append_log(f"[{timestamp()}] Start {action_name}")
 
         def job() -> None:
@@ -143,23 +186,48 @@ class VideoToTextApp:
 
         threading.Thread(target=job, daemon=True).start()
 
-    def _on_success(self, action_name: str, text: str) -> None:
-        self.set_text(text)
-        self.status.set("Done")
+    def _on_success(self, action_name: str, result: str | TranscriptionResult) -> None:
+        if isinstance(result, TranscriptionResult):
+            self.set_text(result.text)
+            self.last_segments = result.segments
+        else:
+            self.set_text(result)
+            self.last_segments = []
+
+        self._set_running(False)
+        self._apply_progress("Done", 100)
         self.append_log(f"[{timestamp()}] Done {action_name}")
 
     def _on_error(self, action_name: str, err: str, detail: str) -> None:
+        self._set_running(False)
+        if "Task cancelled" in err:
+            self._apply_progress("Cancelled", 0)
+            self.append_log(f"[{timestamp()}] Cancelled {action_name}")
+            return
+
         self.status.set("Failed")
         self.append_log(f"[{timestamp()}] Failed {action_name}: {err}")
         self.append_log(detail)
         messagebox.showerror("Error", err)
+
+    def cancel_task(self) -> None:
+        if self._cancel_event and self._running:
+            self._cancel_event.set()
+            self.append_log(f"[{timestamp()}] Cancel requested")
 
     def run_image(self) -> None:
         image = self.image_path.get().strip()
         if not image:
             messagebox.showwarning("提示", "请先选择图片")
             return
-        self.run_worker("OCR", lambda: run_ocr(Path(image)))
+        self.run_worker(
+            "OCR",
+            lambda: run_ocr(
+                Path(image),
+                progress_callback=self._on_progress,
+                is_cancelled=(self._cancel_event.is_set if self._cancel_event else None),
+            ),
+        )
 
     def run_video(self) -> None:
         video = self.video_path.get().strip()
@@ -167,7 +235,15 @@ class VideoToTextApp:
             messagebox.showwarning("提示", "请先选择视频")
             return
         cfg = self.cfg()
-        self.run_worker("Transcribe file", lambda: run_transcribe_file(Path(video), cfg))
+        self.run_worker(
+            "Transcribe file",
+            lambda: run_transcribe_file(
+                Path(video),
+                cfg,
+                progress_callback=self._on_progress,
+                is_cancelled=(self._cancel_event.is_set if self._cancel_event else None),
+            ),
+        )
 
     def run_url(self) -> None:
         url = self.url.get().strip()
@@ -179,7 +255,15 @@ class VideoToTextApp:
         cookie_file = Path(self.cookie_file.get().strip()) if self.cookie_file.get().strip() else None
         data = UrlInput(url=url, cookie_text=cookie_text, cookie_file=cookie_file)
         cfg = self.cfg()
-        self.run_worker("Transcribe URL", lambda: run_transcribe_url(data, cfg))
+        self.run_worker(
+            "Transcribe URL",
+            lambda: run_transcribe_url(
+                data,
+                cfg,
+                progress_callback=self._on_progress,
+                is_cancelled=(self._cancel_event.is_set if self._cancel_event else None),
+            ),
+        )
 
     def export_txt_action(self) -> None:
         text = self.output.get("1.0", END).strip()
@@ -204,6 +288,17 @@ class VideoToTextApp:
         export_docx(text, Path(path))
         self.append_log(f"[{timestamp()}] Exported DOCX: {path}")
         messagebox.showinfo("完成", "DOCX 已导出")
+
+    def export_srt_action(self) -> None:
+        if not self.last_segments:
+            messagebox.showwarning("提示", "当前结果没有时间戳，无法导出 SRT")
+            return
+        path = filedialog.asksaveasfilename(defaultextension=".srt", filetypes=[("Subtitle", "*.srt")])
+        if not path:
+            return
+        export_srt(self.last_segments, Path(path))
+        self.append_log(f"[{timestamp()}] Exported SRT: {path}")
+        messagebox.showinfo("完成", "SRT 已导出")
 
 
 def run_app() -> None:
