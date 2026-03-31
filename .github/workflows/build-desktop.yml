@@ -52,13 +52,15 @@ jobs:
       - name: Build Windows installer
         if: runner.os == 'Windows'
         shell: powershell
-        env:
-          APP_VERSION: ${{ github.ref_name }}
         run: |
           if (-not (Test-Path dist/VideoToText.exe)) {
             Write-Error "Windows exe not found"
           }
+          $env:APP_VERSION = "${{ github.ref_name }}".TrimStart('v')
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\VideoToText.iss
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
           if (-not (Test-Path VideoToText-windows-x64-setup.exe)) {
             Write-Error "Windows setup exe not found"
           }
