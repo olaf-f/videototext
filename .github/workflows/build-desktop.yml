@@ -90,14 +90,16 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: release-assets
+          merge-multiple: true
 
       - name: Show release assets
-        run: find release-assets -type f -maxdepth 3
+        run: find release-assets -maxdepth 3 -type f | sort
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            release-assets/**/*.exe
-            release-assets/**/*.zip
+            release-assets/VideoToText-windows-x64.exe
+            release-assets/VideoToText-windows-x64-setup.exe
+            release-assets/VideoToText-macos-x64.zip
           generate_release_notes: true
