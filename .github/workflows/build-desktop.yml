@@ -17,7 +17,7 @@ jobs:
         include:
           - os: windows-latest
             artifact_name: VideoToText-windows-x64
-            package_path: VideoToText-windows-x64.zip
+            package_path: VideoToText-windows-x64.exe
           - os: macos-latest
             artifact_name: VideoToText-macos-x64
             package_path: VideoToText-macos-x64.zip
@@ -38,19 +38,22 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
-      - name: Build app
+      - name: Build Windows exe
+        if: runner.os == 'Windows'
+        run: python -m PyInstaller --noconfirm --onefile --windowed --name VideoToText --paths src main.py
+
+      - name: Build macOS app
+        if: runner.os == 'macOS'
         run: python -m PyInstaller --noconfirm --windowed --name VideoToText --paths src main.py
 
-      - name: Package windows bundle
+      - name: Prepare Windows artifact
         if: runner.os == 'Windows'
         shell: powershell
         run: |
-          if (Test-Path dist/VideoToText) {
-            Compress-Archive -Path dist/VideoToText -DestinationPath VideoToText-windows-x64.zip -Force
-          } elseif (Test-Path dist/VideoToText.exe) {
-            Compress-Archive -Path dist/VideoToText.exe -DestinationPath VideoToText-windows-x64.zip -Force
+          if (Test-Path dist/VideoToText.exe) {
+            Copy-Item dist/VideoToText.exe VideoToText-windows-x64.exe
           } else {
-            Write-Error "Build output not found"
+            Write-Error "Windows exe not found"
           }
 
       - name: Package macOS bundle
@@ -89,5 +92,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
+            release-assets/**/*.exe
             release-assets/**/*.zip
           generate_release_notes: true
