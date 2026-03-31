@@ -1,5 +1,5 @@
 ﻿#define MyAppName "VideoToText"
-#define MyAppVersion "{#GetEnv('APP_VERSION')}"
+#define MyAppVersion GetEnv("APP_VERSION")
 #define MyAppPublisher "olaf-f"
 #define MyAppExeName "VideoToText.exe"
 
