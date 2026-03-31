@@ -47,6 +47,14 @@ jobs:
         shell: powershell
         run: .\installer\build-setup.ps1 -RepoRoot $PWD
 
+      - name: Normalize Windows release filenames
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          Copy-Item .\dist\VideoToText.exe .\VideoToText-windows-x64.exe -Force
+          if (-not (Test-Path .\VideoToText-windows-x64.exe)) { throw 'VideoToText-windows-x64.exe not found' }
+          if (-not (Test-Path .\VideoToText-windows-x64-setup.exe)) { throw 'VideoToText-windows-x64-setup.exe not found' }
+
       - name: Inspect Windows outputs
         if: runner.os == 'Windows'
         shell: powershell
