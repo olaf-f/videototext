@@ -11,17 +11,13 @@
 - Python 3.10+
 - FFmpeg（必须在 PATH 中）
 
-## 2. 安装依赖
+## 2. 本地运行
 ```bash
 pip install -r requirements.txt
-```
-
-## 3. 启动
-```bash
 python main.py
 ```
 
-## 4. 打包（本地）
+## 3. 本地打包
 Windows PowerShell:
 ```powershell
 ./scripts/build.ps1
@@ -32,14 +28,17 @@ macOS:
 bash ./scripts/build.sh
 ```
 
-生成目录：`dist/VideoToText*`
+## 4. GitHub 自动发布安装包
+1. 推送代码到 `main`
+2. 创建并推送 tag（例如 `v0.1.0`）
+3. GitHub Actions 执行 `.github/workflows/build-desktop.yml`
+4. 自动创建 Release，并附带：
+- `VideoToText-windows-x64.zip`
+- `VideoToText-macos-x64.zip`
 
-## 5. GitHub Actions 自动构建
-- 文件：`.github/workflows/build-desktop.yml`
-- 触发：手动触发 / 推送 `v*` tag
-- 平台：`windows-latest`、`macos-latest`
+下载路径：仓库 `Releases` 页面。
 
-## 6. 注意事项
+## 5. 注意事项
 - 首次运行 Whisper 模型会自动下载，速度取决于网络。
 - 链接下载依赖 `yt-dlp` 支持的平台与内容权限。
 - Cookie 仅在本地任务中临时使用（写入临时目录）。
