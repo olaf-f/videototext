@@ -51,9 +51,23 @@ jobs:
         if: runner.os == 'Windows'
         shell: powershell
         run: |
-          Copy-Item .\dist\VideoToText.exe .\VideoToText-windows-x64.exe -Force
-          if (-not (Test-Path .\VideoToText-windows-x64.exe)) { throw 'VideoToText-windows-x64.exe not found' }
-          if (-not (Test-Path .\VideoToText-windows-x64-setup.exe)) { throw 'VideoToText-windows-x64-setup.exe not found' }
+          $exe = Get-ChildItem -Path $PWD -Recurse -File -Filter 'VideoToText.exe' |
+            Where-Object { $_.FullName -match '\\dist\\' } |
+            Select-Object -First 1
+          if (-not $exe) { throw 'Built VideoToText.exe not found under dist' }
+          Write-Host "Using EXE: $($exe.FullName)"
+          Copy-Item $exe.FullName (Join-Path $PWD 'VideoToText-windows-x64.exe') -Force
+
+          $setup = Get-ChildItem -Path $PWD -Recurse -File -Filter 'VideoToText-windows-x64-setup.exe' |
+            Select-Object -First 1
+          if (-not $setup) { throw 'Built VideoToText-windows-x64-setup.exe not found' }
+          Write-Host "Using Setup: $($setup.FullName)"
+          if ($setup.FullName -ne (Join-Path $PWD 'VideoToText-windows-x64-setup.exe')) {
+            Copy-Item $setup.FullName (Join-Path $PWD 'VideoToText-windows-x64-setup.exe') -Force
+          }
+
+          if (-not (Test-Path (Join-Path $PWD 'VideoToText-windows-x64.exe'))) { throw 'Normalized VideoToText-windows-x64.exe not found' }
+          if (-not (Test-Path (Join-Path $PWD 'VideoToText-windows-x64-setup.exe'))) { throw 'Normalized VideoToText-windows-x64-setup.exe not found' }
 
       - name: Inspect Windows outputs
         if: runner.os == 'Windows'
