@@ -30,16 +30,17 @@ bash ./scripts/build.sh
 
 ## 4. GitHub 自动发布安装包
 1. 推送代码到 `main`
-2. 创建并推送 tag（例如 `v0.1.1`）
+2. 创建并推送 tag（例如 `v0.1.2`）
 3. GitHub Actions 执行 `.github/workflows/build-desktop.yml`
 4. 自动创建 Release，并附带：
 - `VideoToText-windows-x64.exe`
+- `VideoToText-windows-x64-setup.exe`
 - `VideoToText-macos-x64.zip`
 
 下载路径：仓库 `Releases` 页面。
 
 ## 5. 注意事项
-- Windows 产物现在是单文件 `exe`，启动会比目录版稍慢一点。
+- Windows 现在同时提供单文件 `exe` 和安装器 `setup.exe`。
 - 首次运行 Whisper 模型会自动下载，速度取决于网络。
 - 链接下载依赖 `yt-dlp` 支持的平台与内容权限。
 - Cookie 仅在本地任务中临时使用（写入临时目录）。
