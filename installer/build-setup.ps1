@@ -13,6 +13,7 @@ if (-not (Test-Path $sourceExe)) {
 
 Copy-Item $sourceExe (Join-Path $payload "VideoToText.exe") -Force
 Copy-Item (Join-Path $RepoRoot "installer\install.cmd") (Join-Path $payload "install.cmd") -Force
+Copy-Item (Join-Path $RepoRoot "installer\uninstall.cmd") (Join-Path $payload "uninstall.cmd") -Force
 
 $target = Join-Path $RepoRoot "VideoToText-windows-x64-setup.exe"
 $sed = @"
@@ -41,11 +42,13 @@ SourceFiles=SourceFiles
 [Strings]
 FILE0=VideoToText.exe
 FILE1=install.cmd
+FILE2=uninstall.cmd
 [SourceFiles]
 SourceFiles0=$payload
 [SourceFiles0]
 %FILE0%=
 %FILE1%=
+%FILE2%=
 "@
 
 $sedPath = Join-Path $RepoRoot "installer\VideoToText.sed"
