@@ -1,0 +1,27 @@
+[package]
+name = "smartocr-pro"
+version = "0.1.0"
+edition = "2021"
+description = "SmartOCR Pro desktop workspace scaffold"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+deunicode = "1"
+image = { version = "0.25", default-features = false, features = ["bmp", "gif", "jpeg", "png", "tiff", "webp"] }
+keyring = "3"
+ort = { version = "=2.0.0-rc.10", default-features = false, features = ["download-binaries", "copy-dylibs"] }
+paddle-ocr-rs = "0.6.1"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"
+thiserror = "2"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+
+[lib]
+name = "smartocr_pro"
+crate-type = ["staticlib", "cdylib", "rlib"]

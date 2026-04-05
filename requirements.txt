@@ -1,0 +1,4 @@
+﻿faster-whisper
+rapidocr-onnxruntime
+yt-dlp
+python-docx
