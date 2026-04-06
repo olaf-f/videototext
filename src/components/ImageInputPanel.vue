@@ -35,6 +35,8 @@ const pickerOpen = ref(false)
 const pickerItems = ref<PickerItem[]>([])
 const pickerActiveIndex = ref(0)
 const pickerDragFromIndex = ref<number | null>(null)
+const pickerDragOverIndex = ref<number | null>(null)
+const pickerDragging = ref(false)
 const pickerError = ref('')
 const pickerFileInput = ref<HTMLInputElement | null>(null)
 
@@ -137,9 +139,11 @@ function onPickerFileChange(event: Event) {
 
 function onPickerDragStart(index: number, event: DragEvent) {
   pickerDragFromIndex.value = index
+  pickerDragging.value = true
   if (event.dataTransfer) {
     event.dataTransfer.effectAllowed = 'move'
     event.dataTransfer.dropEffect = 'move'
+    event.dataTransfer.setData('application/x-smartocr-index', String(index))
     event.dataTransfer.setData('text/plain', String(index))
   }
 }
@@ -151,23 +155,12 @@ function onPickerDragOver(event: DragEvent) {
   }
 }
 
-function onPickerDrop(toIndex: number, event: DragEvent) {
-  event.preventDefault()
+function onPickerDragEnter(index: number) {
+  pickerDragOverIndex.value = index
+}
 
-  const listFiles = collectFiles(event.dataTransfer?.files ?? null)
-  if (listFiles.length) {
-    appendPickerFiles(listFiles)
-    pickerDragFromIndex.value = null
-    return
-  }
-
-  const fromText = event.dataTransfer?.getData('text/plain') ?? ''
-  const parsed = Number.parseInt(fromText, 10)
-  const fromIndex = Number.isFinite(parsed) ? parsed : pickerDragFromIndex.value
-  pickerDragFromIndex.value = null
-
+function reorderPickerItems(fromIndex: number, toIndex: number) {
   if (
-    fromIndex == null ||
     fromIndex === toIndex ||
     fromIndex < 0 ||
     toIndex < 0 ||
@@ -191,8 +184,37 @@ function onPickerDrop(toIndex: number, event: DragEvent) {
   }
 }
 
+function onPickerDrop(toIndex: number, event: DragEvent) {
+  event.preventDefault()
+
+  const listFiles = collectFiles(event.dataTransfer?.files ?? null)
+  if (listFiles.length) {
+    appendPickerFiles(listFiles)
+    pickerDragFromIndex.value = null
+    pickerDragOverIndex.value = null
+    pickerDragging.value = false
+    return
+  }
+
+  const fromCustom = event.dataTransfer?.getData('application/x-smartocr-index') ?? ''
+  const fromText = fromCustom || event.dataTransfer?.getData('text/plain') || ''
+  const parsed = Number.parseInt(fromText, 10)
+  const fromIndex = Number.isFinite(parsed) ? parsed : pickerDragFromIndex.value
+  pickerDragFromIndex.value = null
+  pickerDragOverIndex.value = null
+  pickerDragging.value = false
+
+  if (fromIndex == null) {
+    return
+  }
+
+  reorderPickerItems(fromIndex, toIndex)
+}
+
 function onPickerDragEnd() {
   pickerDragFromIndex.value = null
+  pickerDragOverIndex.value = null
+  pickerDragging.value = false
 }
 
 function removePickerItem(index: number) {
@@ -216,6 +238,9 @@ function removePickerItem(index: number) {
 }
 
 function selectPickerItem(index: number) {
+  if (pickerDragging.value) {
+    return
+  }
   pickerActiveIndex.value = index
 }
 
@@ -406,20 +431,28 @@ onBeforeUnmount(() => {
               v-for="(item, index) in pickerItems"
               :key="item.id"
               class="picker-item"
-              :class="{ 'is-active': index === pickerActiveIndex }"
+              :class="{ 'is-active': index === pickerActiveIndex, 'is-drag-over': index === pickerDragOverIndex }"
               draggable="true"
               @click="selectPickerItem(index)"
               @dragstart="onPickerDragStart(index, $event)"
+              @dragenter.prevent="onPickerDragEnter(index)"
               @dragover="onPickerDragOver"
               @drop="onPickerDrop(index, $event)"
               @dragend="onPickerDragEnd"
             >
-              <img :src="item.previewUrl" :alt="item.file.name" class="picker-thumb" />
+              <span class="drag-handle" title="拖拽排序" aria-hidden="true">⋮⋮</span>
+              <img :src="item.previewUrl" :alt="item.file.name" class="picker-thumb" draggable="false" />
               <div class="picker-item-meta">
                 <p class="picker-item-name">{{ index + 1 }}. {{ item.file.name }}</p>
                 <p class="picker-item-size">{{ Math.max(1, Math.round(item.file.size / 1024)) }} KB</p>
               </div>
-              <button class="ghost-button picker-delete-button" type="button" :disabled="busy" @click.stop="removePickerItem(index)">
+              <button
+                class="ghost-button picker-delete-button"
+                type="button"
+                :disabled="busy"
+                draggable="false"
+                @click.stop="removePickerItem(index)"
+              >
                 删除
               </button>
             </li>

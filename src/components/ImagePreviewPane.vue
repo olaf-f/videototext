@@ -16,6 +16,8 @@ const emit = defineEmits<{
 }>()
 
 const dragFromIndex = ref<number | null>(null)
+const dragOverIndex = ref<number | null>(null)
+const dragging = ref(false)
 
 const positionLabel = computed(() => {
   if (!props.imageCount) {
@@ -35,9 +37,11 @@ function toNext() {
 
 function onDragStart(index: number, event: DragEvent) {
   dragFromIndex.value = index
+  dragging.value = true
   if (event.dataTransfer) {
     event.dataTransfer.effectAllowed = 'move'
     event.dataTransfer.dropEffect = 'move'
+    event.dataTransfer.setData('application/x-smartocr-index', String(index))
     event.dataTransfer.setData('text/plain', String(index))
   }
 }
@@ -49,22 +53,47 @@ function onDragOver(event: DragEvent) {
   }
 }
 
-function onDrop(toIndex: number, event: DragEvent) {
-  event.preventDefault()
-  const fromText = event.dataTransfer?.getData('text/plain') ?? ''
-  const parsed = Number.parseInt(fromText, 10)
-  const fromIndex = Number.isFinite(parsed) ? parsed : dragFromIndex.value
-  dragFromIndex.value = null
+function onDragEnter(index: number) {
+  dragOverIndex.value = index
+}
 
-  if (fromIndex == null || fromIndex === toIndex) {
+function reorder(fromIndex: number, toIndex: number) {
+  if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) {
     return
   }
 
   emit('reorder-images', { fromIndex, toIndex })
 }
 
+function onDrop(toIndex: number, event: DragEvent) {
+  event.preventDefault()
+  const fromCustom = event.dataTransfer?.getData('application/x-smartocr-index') ?? ''
+  const fromText = fromCustom || event.dataTransfer?.getData('text/plain') || ''
+  const parsed = Number.parseInt(fromText, 10)
+  const fromIndex = Number.isFinite(parsed) ? parsed : dragFromIndex.value
+
+  dragFromIndex.value = null
+  dragOverIndex.value = null
+  dragging.value = false
+
+  if (fromIndex == null) {
+    return
+  }
+
+  reorder(fromIndex, toIndex)
+}
+
 function onDragEnd() {
   dragFromIndex.value = null
+  dragOverIndex.value = null
+  dragging.value = false
+}
+
+function selectIndex(index: number) {
+  if (dragging.value) {
+    return
+  }
+  emit('set-index', index)
 }
 </script>
 
@@ -97,14 +126,16 @@ function onDragEnd() {
           v-for="(image, index) in activeImages"
           :key="image.id"
           class="sortable-item"
-          :class="{ 'is-active': index === imageIndex }"
+          :class="{ 'is-active': index === imageIndex, 'is-drag-over': index === dragOverIndex }"
           draggable="true"
-          @click="emit('set-index', index)"
+          @click="selectIndex(index)"
           @dragstart="onDragStart(index, $event)"
+          @dragenter.prevent="onDragEnter(index)"
           @dragover="onDragOver"
           @drop="onDrop(index, $event)"
           @dragend="onDragEnd"
         >
+          <span class="drag-handle" title="拖拽排序" aria-hidden="true">⋮⋮</span>
           <span class="sort-order">{{ index + 1 }}</span>
           <span class="sort-name">{{ image.displayName }}</span>
         </li>

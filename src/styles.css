@@ -441,6 +441,19 @@ img {
   background: rgba(204, 251, 241, 0.52);
 }
 
+.sortable-item.is-drag-over {
+  border-color: rgba(15, 118, 110, 0.72);
+  background: rgba(153, 246, 228, 0.45);
+}
+
+.drag-handle {
+  color: #64748b;
+  font-size: 0.9rem;
+  line-height: 1;
+  letter-spacing: -0.08em;
+  flex: 0 0 auto;
+}
+
 .sort-order {
   width: 1.25rem;
   height: 1.25rem;
@@ -563,11 +576,12 @@ img {
   border: 1px solid rgba(148, 163, 184, 0.34);
   background: rgba(255, 255, 255, 0.84);
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto auto 1fr auto;
   align-items: center;
   gap: 0.48rem;
   padding: 0.36rem 0.42rem;
   cursor: grab;
+  user-select: none;
 }
 
 .picker-item:active {
@@ -577,6 +591,11 @@ img {
 .picker-item.is-active {
   border-color: rgba(15, 118, 110, 0.42);
   background: rgba(204, 251, 241, 0.5);
+}
+
+.picker-item.is-drag-over {
+  border-color: rgba(15, 118, 110, 0.72);
+  background: rgba(153, 246, 228, 0.45);
 }
 
 .picker-thumb {
