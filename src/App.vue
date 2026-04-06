@@ -87,6 +87,7 @@ onBeforeUnmount(() => {
         @open-settings="appStore.openSettings()"
         @open-web-portal="appStore.openWebPortal()"
         @run-pipeline="appStore.runPipeline()"
+        @set-preview-index="appStore.setCurrentImageIndex"
         @update:url-input="appStore.setUrlInput"
       />
 
