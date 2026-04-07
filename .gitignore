@@ -27,6 +27,9 @@ release/
 target/
 src-tauri/target/
 src-tauri/gen/
+src-tauri/icons/*
+!src-tauri/icons/icon.ico
+!src-tauri/icons/icon.svg
 
 # Git worktrees
 .worktrees/

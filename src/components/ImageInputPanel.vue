@@ -1,5 +1,6 @@
 ﻿<script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import Sortable, { type SortableEvent } from 'sortablejs'
 
 import type { ActiveImageSource } from '../lib/types'
 
@@ -34,11 +35,11 @@ const dragActive = ref(false)
 const pickerOpen = ref(false)
 const pickerItems = ref<PickerItem[]>([])
 const pickerActiveIndex = ref(0)
-const pickerDragFromIndex = ref<number | null>(null)
-const pickerDragOverIndex = ref<number | null>(null)
 const pickerDragging = ref(false)
 const pickerError = ref('')
 const pickerFileInput = ref<HTMLInputElement | null>(null)
+const pickerListRef = ref<HTMLElement | null>(null)
+let pickerSortable: Sortable | null = null
 
 const lightboxOpen = ref(false)
 const lightboxIndex = ref(0)
@@ -59,11 +60,20 @@ function revokePickerItemUrls(items: PickerItem[]) {
   items.forEach((item) => URL.revokeObjectURL(item.previewUrl))
 }
 
+function destroyPickerSortable() {
+  if (pickerSortable) {
+    pickerSortable.destroy()
+    pickerSortable = null
+  }
+}
+
 function resetPicker(items: PickerItem[] = []) {
+  destroyPickerSortable()
   revokePickerItemUrls(pickerItems.value)
   pickerItems.value = items
   pickerActiveIndex.value = items.length ? 0 : 0
   pickerError.value = ''
+  pickerDragging.value = false
 }
 
 function collectFiles(list: FileList | null): File[] {
@@ -112,53 +122,6 @@ function buildPickerItemsFromActiveImages(images: ActiveImageSource[]): PickerIt
   })
 }
 
-function openPicker() {
-  emit('lock-url-import')
-  const initialItems = buildPickerItemsFromActiveImages(props.activeImages)
-  resetPicker(initialItems)
-  pickerOpen.value = true
-}
-
-function closePicker() {
-  pickerOpen.value = false
-  resetPicker([])
-  if (pickerFileInput.value) {
-    pickerFileInput.value.value = ''
-  }
-}
-
-function openPickerFileInput() {
-  pickerFileInput.value?.click()
-}
-
-function onPickerFileChange(event: Event) {
-  const input = event.target as HTMLInputElement
-  appendPickerFiles(collectFiles(input.files))
-  input.value = ''
-}
-
-function onPickerDragStart(index: number, event: DragEvent) {
-  pickerDragFromIndex.value = index
-  pickerDragging.value = true
-  if (event.dataTransfer) {
-    event.dataTransfer.effectAllowed = 'move'
-    event.dataTransfer.dropEffect = 'move'
-    event.dataTransfer.setData('application/x-smartocr-index', String(index))
-    event.dataTransfer.setData('text/plain', String(index))
-  }
-}
-
-function onPickerDragOver(event: DragEvent) {
-  event.preventDefault()
-  if (event.dataTransfer) {
-    event.dataTransfer.dropEffect = 'move'
-  }
-}
-
-function onPickerDragEnter(index: number) {
-  pickerDragOverIndex.value = index
-}
-
 function reorderPickerItems(fromIndex: number, toIndex: number) {
   if (
     fromIndex === toIndex ||
@@ -184,37 +147,78 @@ function reorderPickerItems(fromIndex: number, toIndex: number) {
   }
 }
 
-function onPickerDrop(toIndex: number, event: DragEvent) {
-  event.preventDefault()
-
-  const listFiles = collectFiles(event.dataTransfer?.files ?? null)
-  if (listFiles.length) {
-    appendPickerFiles(listFiles)
-    pickerDragFromIndex.value = null
-    pickerDragOverIndex.value = null
-    pickerDragging.value = false
-    return
-  }
-
-  const fromCustom = event.dataTransfer?.getData('application/x-smartocr-index') ?? ''
-  const fromText = fromCustom || event.dataTransfer?.getData('text/plain') || ''
-  const parsed = Number.parseInt(fromText, 10)
-  const fromIndex = Number.isFinite(parsed) ? parsed : pickerDragFromIndex.value
-  pickerDragFromIndex.value = null
-  pickerDragOverIndex.value = null
+function onPickerSortEnd(event: SortableEvent) {
   pickerDragging.value = false
 
-  if (fromIndex == null) {
+  const fromIndex = event.oldIndex
+  const toIndex = event.newIndex
+
+  if (fromIndex == null || toIndex == null || fromIndex === toIndex) {
     return
   }
 
   reorderPickerItems(fromIndex, toIndex)
 }
 
-function onPickerDragEnd() {
-  pickerDragFromIndex.value = null
-  pickerDragOverIndex.value = null
-  pickerDragging.value = false
+function initPickerSortable() {
+  destroyPickerSortable()
+
+  if (!pickerOpen.value || !pickerListRef.value || pickerItems.value.length < 2) {
+    return
+  }
+
+  pickerSortable = Sortable.create(pickerListRef.value, {
+    animation: 150,
+    draggable: '.picker-item',
+    handle: '.drag-handle',
+    forceFallback: true,
+    fallbackTolerance: 3,
+    ghostClass: 'is-sort-ghost',
+    chosenClass: 'is-sort-chosen',
+    dragClass: 'is-sort-drag',
+    onStart: () => {
+      pickerDragging.value = true
+    },
+    onEnd: onPickerSortEnd,
+  })
+}
+
+function openPicker() {
+  emit('lock-url-import')
+  const initialItems = buildPickerItemsFromActiveImages(props.activeImages)
+  resetPicker(initialItems)
+  pickerOpen.value = true
+  void nextTick(() => initPickerSortable())
+}
+
+function closePicker() {
+  pickerOpen.value = false
+  resetPicker([])
+  if (pickerFileInput.value) {
+    pickerFileInput.value.value = ''
+  }
+}
+
+function openPickerFileInput() {
+  pickerFileInput.value?.click()
+}
+
+function onPickerFileChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  appendPickerFiles(collectFiles(input.files))
+  input.value = ''
+}
+
+function onPickerDragOver(event: DragEvent) {
+  event.preventDefault()
+}
+
+function onPickerDropZone(event: DragEvent) {
+  event.preventDefault()
+  const listFiles = collectFiles(event.dataTransfer?.files ?? null)
+  if (listFiles.length) {
+    appendPickerFiles(listFiles)
+  }
 }
 
 function removePickerItem(index: number) {
@@ -328,7 +332,21 @@ watch(
   },
 )
 
+watch(
+  () => [pickerOpen.value, pickerItems.value.length] as const,
+  async ([open]) => {
+    if (!open) {
+      destroyPickerSortable()
+      return
+    }
+
+    await nextTick()
+    initPickerSortable()
+  },
+)
+
 onBeforeUnmount(() => {
+  destroyPickerSortable()
   resetPicker([])
 })
 </script>
@@ -421,24 +439,18 @@ onBeforeUnmount(() => {
 
       <div class="picker-grid">
         <div class="picker-panel">
-          <div class="picker-drop-zone" @dragover="onPickerDragOver" @drop="onPickerDrop(0, $event)">
+          <div class="picker-drop-zone" @dragover="onPickerDragOver" @drop="onPickerDropZone">
             <p class="drop-title">拖拽图片到此区域添加</p>
             <p class="drop-desc">可继续添加，超出 30 张会自动忽略。</p>
           </div>
 
-          <ul class="picker-list">
+          <ul ref="pickerListRef" class="picker-list">
             <li
               v-for="(item, index) in pickerItems"
               :key="item.id"
               class="picker-item"
-              :class="{ 'is-active': index === pickerActiveIndex, 'is-drag-over': index === pickerDragOverIndex }"
-              draggable="true"
+              :class="{ 'is-active': index === pickerActiveIndex }"
               @click="selectPickerItem(index)"
-              @dragstart="onPickerDragStart(index, $event)"
-              @dragenter.prevent="onPickerDragEnter(index)"
-              @dragover="onPickerDragOver"
-              @drop="onPickerDrop(index, $event)"
-              @dragend="onPickerDragEnd"
             >
               <span class="drag-handle" title="拖拽排序" aria-hidden="true">⋮⋮</span>
               <img :src="item.previewUrl" :alt="item.file.name" class="picker-thumb" draggable="false" />

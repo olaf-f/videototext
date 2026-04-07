@@ -1,5 +1,6 @@
 ﻿<script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import Sortable, { type SortableEvent } from 'sortablejs'
 
 import type { ActiveImageSource } from '../lib/types'
 
@@ -15,9 +16,9 @@ const emit = defineEmits<{
   'reorder-images': [payload: { fromIndex: number; toIndex: number }]
 }>()
 
-const dragFromIndex = ref<number | null>(null)
-const dragOverIndex = ref<number | null>(null)
+const listRef = ref<HTMLElement | null>(null)
 const dragging = ref(false)
+let sortable: Sortable | null = null
 
 const positionLabel = computed(() => {
   if (!props.imageCount) {
@@ -35,58 +36,47 @@ function toNext() {
   emit('set-index', props.imageIndex + 1)
 }
 
-function onDragStart(index: number, event: DragEvent) {
-  dragFromIndex.value = index
-  dragging.value = true
-  if (event.dataTransfer) {
-    event.dataTransfer.effectAllowed = 'move'
-    event.dataTransfer.dropEffect = 'move'
-    event.dataTransfer.setData('application/x-smartocr-index', String(index))
-    event.dataTransfer.setData('text/plain', String(index))
+function destroySortable() {
+  if (sortable) {
+    sortable.destroy()
+    sortable = null
   }
 }
 
-function onDragOver(event: DragEvent) {
-  event.preventDefault()
-  if (event.dataTransfer) {
-    event.dataTransfer.dropEffect = 'move'
-  }
-}
+function onSortEnd(event: SortableEvent) {
+  dragging.value = false
 
-function onDragEnter(index: number) {
-  dragOverIndex.value = index
-}
+  const fromIndex = event.oldIndex
+  const toIndex = event.newIndex
 
-function reorder(fromIndex: number, toIndex: number) {
-  if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) {
+  if (fromIndex == null || toIndex == null || fromIndex === toIndex) {
     return
   }
 
   emit('reorder-images', { fromIndex, toIndex })
 }
 
-function onDrop(toIndex: number, event: DragEvent) {
-  event.preventDefault()
-  const fromCustom = event.dataTransfer?.getData('application/x-smartocr-index') ?? ''
-  const fromText = fromCustom || event.dataTransfer?.getData('text/plain') || ''
-  const parsed = Number.parseInt(fromText, 10)
-  const fromIndex = Number.isFinite(parsed) ? parsed : dragFromIndex.value
+function initSortable() {
+  destroySortable()
 
-  dragFromIndex.value = null
-  dragOverIndex.value = null
-  dragging.value = false
-
-  if (fromIndex == null) {
+  if (!listRef.value || props.imageCount < 2) {
     return
   }
 
-  reorder(fromIndex, toIndex)
-}
-
-function onDragEnd() {
-  dragFromIndex.value = null
-  dragOverIndex.value = null
-  dragging.value = false
+  sortable = Sortable.create(listRef.value, {
+    animation: 150,
+    draggable: '.sortable-item',
+    handle: '.drag-handle',
+    forceFallback: true,
+    fallbackTolerance: 3,
+    ghostClass: 'is-sort-ghost',
+    chosenClass: 'is-sort-chosen',
+    dragClass: 'is-sort-drag',
+    onStart: () => {
+      dragging.value = true
+    },
+    onEnd: onSortEnd,
+  })
 }
 
 function selectIndex(index: number) {
@@ -95,6 +85,18 @@ function selectIndex(index: number) {
   }
   emit('set-index', index)
 }
+
+watch(
+  () => [props.imageCount, props.activeImages.map((item) => item.id).join('|')] as const,
+  async () => {
+    await nextTick()
+    initSortable()
+  },
+)
+
+onBeforeUnmount(() => {
+  destroySortable()
+})
 </script>
 
 <template>
@@ -121,19 +123,13 @@ function selectIndex(index: number) {
 
     <div v-if="imageCount > 1" class="sortable-list-wrap">
       <p class="field-hint">拖拽排序（OCR/AI 按此顺序执行）</p>
-      <ul class="sortable-list">
+      <ul ref="listRef" class="sortable-list">
         <li
           v-for="(image, index) in activeImages"
           :key="image.id"
           class="sortable-item"
-          :class="{ 'is-active': index === imageIndex, 'is-drag-over': index === dragOverIndex }"
-          draggable="true"
+          :class="{ 'is-active': index === imageIndex }"
           @click="selectIndex(index)"
-          @dragstart="onDragStart(index, $event)"
-          @dragenter.prevent="onDragEnter(index)"
-          @dragover="onDragOver"
-          @drop="onDrop(index, $event)"
-          @dragend="onDragEnd"
         >
           <span class="drag-handle" title="拖拽排序" aria-hidden="true">⋮⋮</span>
           <span class="sort-order">{{ index + 1 }}</span>
