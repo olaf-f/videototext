@@ -1,5 +1,5 @@
 ﻿<script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed } from 'vue'
 
 const props = defineProps<{
   busy: boolean
@@ -14,8 +14,6 @@ const emit = defineEmits<{
   'update:model-value': [value: string]
 }>()
 
-const textRef = ref<HTMLTextAreaElement | null>(null)
-
 const lineCount = computed(() => {
   if (!props.modelValue.trim()) {
     return 0
@@ -26,32 +24,10 @@ const lineCount = computed(() => {
 
 const charCount = computed(() => props.modelValue.trim().length)
 
-function resizeTextarea() {
-  const el = textRef.value
-  if (!el) {
-    return
-  }
-
-  el.style.height = 'auto'
-  el.style.height = `${Math.max(200, el.scrollHeight)}px`
-}
-
 function handleInput(event: Event) {
   const nextValue = (event.target as HTMLTextAreaElement).value
   emit('update:model-value', nextValue)
-  resizeTextarea()
 }
-
-watch(
-  () => props.modelValue,
-  () => {
-    void nextTick(() => resizeTextarea())
-  },
-)
-
-onMounted(() => {
-  resizeTextarea()
-})
 </script>
 
 <template>
@@ -70,7 +46,6 @@ onMounted(() => {
     </div>
 
     <textarea
-      ref="textRef"
       class="accumulator-textarea"
       :value="modelValue"
       placeholder="一键流程结果会自动写入这里，可继续编辑后导出。"

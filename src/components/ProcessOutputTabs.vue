@@ -1,5 +1,5 @@
 ﻿<script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import { renderMarkdown } from '../lib/markdown'
 import type { AiResult, OcrResult } from '../lib/types'
@@ -24,7 +24,6 @@ const emit = defineEmits<{
 }>()
 
 const activeTab = ref<'ocr' | 'ai'>('ocr')
-const promptTextarea = ref<HTMLTextAreaElement | null>(null)
 const renderedHtml = computed(() => renderMarkdown(props.aiResult?.markdown ?? ''))
 
 const ocrCharCount = computed(() => props.ocrResult?.text.trim().length ?? 0)
@@ -38,23 +37,6 @@ const activeDuration = computed(() => {
   return props.aiResult?.durationMs ?? null
 })
 
-function resizePrompt() {
-  const el = promptTextarea.value
-  if (!el) {
-    return
-  }
-
-  el.style.height = 'auto'
-  el.style.height = `${Math.max(96, el.scrollHeight)}px`
-}
-
-watch(
-  () => props.prompt,
-  () => {
-    void nextTick(() => resizePrompt())
-  },
-)
-
 watch(
   () => props.aiResult?.markdown,
   (value) => {
@@ -63,10 +45,6 @@ watch(
     }
   },
 )
-
-onMounted(() => {
-  resizePrompt()
-})
 </script>
 
 <template>
@@ -103,7 +81,7 @@ onMounted(() => {
       </button>
     </div>
 
-    <div v-if="activeTab === 'ocr'" class="tab-content">
+    <div v-if="activeTab === 'ocr'" class="tab-content tab-content-ocr">
       <div class="result-surface plain-surface">
         {{ ocrResult?.text || '执行一键流程后，这里会按上传顺序展示全部图片 OCR 结果。' }}
       </div>
@@ -118,11 +96,10 @@ onMounted(() => {
       </div>
     </div>
 
-    <div v-else class="tab-content">
+    <div v-else class="tab-content tab-content-ai">
       <label class="field">
         <span>结构化提示词（作用于全部图片识别结果）</span>
         <textarea
-          ref="promptTextarea"
           class="prompt-textarea"
           :value="prompt"
           placeholder="例如：先按图片编号总结，再给出跨图片综合结论。"

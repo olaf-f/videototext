@@ -53,11 +53,11 @@ img {
 }
 
 .app-shell {
-  width: min(100%, 1460px);
+  width: min(100%, 1680px);
   margin: 0 auto;
-  padding: 1.2rem 1rem 1.5rem;
+  padding: 0.75rem 0.72rem 0.95rem;
   display: grid;
-  gap: 0.75rem;
+  gap: 0.58rem;
 }
 
 .app-header,
@@ -96,7 +96,7 @@ img {
 }
 
 .panel-heading h2 {
-  font-size: 1.82rem;
+  font-size: 1.62rem;
 }
 
 .lead,
@@ -182,7 +182,7 @@ img {
 .workspace-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.75rem;
+  gap: 0.58rem;
 }
 
 .four-panel-grid {
@@ -190,9 +190,9 @@ img {
 }
 
 .panel {
-  padding: 0.82rem;
+  padding: 0.72rem;
   display: grid;
-  gap: 0.65rem;
+  gap: 0.55rem;
 }
 
 .panel-heading {
@@ -231,16 +231,18 @@ img {
 
 .prompt-textarea,
 .accumulator-textarea {
-  overflow: hidden;
+  overflow: auto;
   resize: none;
 }
 
 .prompt-textarea {
-  min-height: 96px;
+  min-height: 88px;
+  max-height: 132px;
 }
 
 .accumulator-textarea {
-  min-height: 200px;
+  min-height: 0;
+  height: 100%;
 }
 
 .primary-button,
@@ -381,6 +383,20 @@ img {
   min-height: 340px;
 }
 
+.output-panel,
+.accumulator-panel {
+  height: clamp(460px, calc(100vh - 248px), 840px);
+  overflow: hidden;
+}
+
+.output-panel {
+  grid-template-rows: auto auto auto 1fr;
+}
+
+.accumulator-panel {
+  grid-template-rows: auto auto 1fr auto;
+}
+
 .preview-frame,
 .empty-state,
 .result-surface,
@@ -493,15 +509,15 @@ img {
 }
 
 .result-surface {
-  min-height: 164px;
+  min-height: 0;
   padding: 0.75rem;
   white-space: pre-wrap;
   word-break: break-word;
-  overflow: visible;
+  overflow: auto;
 }
 
 .markdown-surface {
-  min-height: 164px;
+  min-height: 0;
   color: #243447;
 }
 
@@ -543,6 +559,15 @@ img {
 .tab-content {
   display: grid;
   gap: 0.6rem;
+  min-height: 0;
+}
+
+.tab-content-ocr {
+  grid-template-rows: 1fr auto;
+}
+
+.tab-content-ai {
+  grid-template-rows: auto 1fr auto;
 }
 
 .picker-toolbar {
@@ -755,6 +780,7 @@ img {
   .preview-panel,
   .output-panel,
   .accumulator-panel {
+    height: auto;
     min-height: unset;
   }
 }
