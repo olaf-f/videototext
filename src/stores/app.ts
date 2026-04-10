@@ -372,12 +372,13 @@ export const useAppStore = defineStore('app', () => {
       }
 
       statusMessage.value = '流程 3/3：写入汇总中...'
-      let merged = accumulatorMarkdown.value
-      merged = appendAccumulatorSection(merged, 'OCR 结果（全图顺序）', ocr.text)
       if (ai?.markdown.trim()) {
-        merged = appendAccumulatorSection(merged, 'AI 结构化结果（全图分析）', ai.markdown)
+        accumulatorMarkdown.value = appendAccumulatorSection(
+          accumulatorMarkdown.value,
+          'AI 结构化结果（全图分析）',
+          ai.markdown,
+        )
       }
-      accumulatorMarkdown.value = merged
 
       statusMessage.value = `一键流程完成：共 ${images.length} 张图片。`
     })

@@ -1,5 +1,5 @@
 ﻿<script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 const props = defineProps<{
   busy: boolean
@@ -14,19 +14,67 @@ const emit = defineEmits<{
   'update:model-value': [value: string]
 }>()
 
+const draftValue = ref(props.modelValue)
+const editing = ref(false)
+
 const lineCount = computed(() => {
-  if (!props.modelValue.trim()) {
+  if (!draftValue.value.trim()) {
     return 0
   }
 
-  return props.modelValue.split(/\r?\n/).length
+  return draftValue.value.split(/\r?\n/).length
 })
 
-const charCount = computed(() => props.modelValue.trim().length)
+const charCount = computed(() => draftValue.value.trim().length)
+
+watch(
+  () => props.modelValue,
+  (value) => {
+    if (!editing.value) {
+      draftValue.value = value
+    }
+  },
+)
+
+function syncDraftToStore() {
+  if (draftValue.value !== props.modelValue) {
+    emit('update:model-value', draftValue.value)
+  }
+}
 
 function handleInput(event: Event) {
-  const nextValue = (event.target as HTMLTextAreaElement).value
-  emit('update:model-value', nextValue)
+  draftValue.value = (event.target as HTMLTextAreaElement).value
+}
+
+function handleFocus() {
+  editing.value = true
+}
+
+function handleBlur() {
+  editing.value = false
+  syncDraftToStore()
+}
+
+function handleMouseLeave() {
+  if (editing.value) {
+    syncDraftToStore()
+  }
+}
+
+function handleClear() {
+  draftValue.value = ''
+  editing.value = false
+  emit('clear')
+}
+
+function exportMarkdown() {
+  syncDraftToStore()
+  emit('export-md')
+}
+
+function exportText() {
+  syncDraftToStore()
+  emit('export-txt')
 }
 </script>
 
@@ -37,7 +85,7 @@ function handleInput(event: Event) {
         <p class="panel-kicker">结果归档</p>
         <h2>汇总编辑与导出</h2>
       </div>
-      <button class="ghost-button" type="button" :disabled="busy" @click="emit('clear')">清空</button>
+      <button class="ghost-button" type="button" :disabled="busy" @click="handleClear">清空</button>
     </div>
 
     <div class="meta-row">
@@ -47,16 +95,19 @@ function handleInput(event: Event) {
 
     <textarea
       class="accumulator-textarea"
-      :value="modelValue"
-      placeholder="一键流程结果会自动写入这里，可继续编辑后导出。"
+      :value="draftValue"
+      placeholder="每次 AI 结构化结果会自动写入这里，可继续编辑后导出。"
+      @focus="handleFocus"
+      @blur="handleBlur"
+      @mouseleave="handleMouseLeave"
       @input="handleInput"
     />
 
     <div class="button-row">
-      <button class="secondary-button" type="button" :disabled="busy || !canExport" @click="emit('export-md')">
+      <button class="secondary-button" type="button" :disabled="busy || !canExport" @click="exportMarkdown">
         导出 Markdown
       </button>
-      <button class="secondary-button" type="button" :disabled="busy || !canExport" @click="emit('export-txt')">
+      <button class="secondary-button" type="button" :disabled="busy || !canExport" @click="exportText">
         导出文本
       </button>
     </div>
