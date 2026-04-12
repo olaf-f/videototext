@@ -10,7 +10,7 @@ permissions:
   contents: write
 
 jobs:
-  windows-portable:
+  windows-build:
     runs-on: windows-latest
 
     steps:
@@ -38,11 +38,22 @@ jobs:
         shell: pwsh
         run: ./scripts/package-portable.ps1
 
-      - name: Upload workflow artifact
+      - name: Build NSIS installer
+        shell: pwsh
+        run: ./scripts/build-installer.ps1 -SkipAssetDownload
+
+      - name: Upload portable workflow artifact
         uses: actions/upload-artifact@v4
         with:
           name: SmartOCR-Pro-windows-portable
           path: release/portable/SmartOCR-Pro-windows-portable.zip
+          if-no-files-found: error
+
+      - name: Upload installer workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SmartOCR-Pro-windows-installer
+          path: release/installer/SmartOCR-Pro-setup.exe
           if-no-files-found: error
 
       - name: Ensure GitHub Release Exists
@@ -62,4 +73,14 @@ jobs:
         run: |
           gh release upload "${GITHUB_REF_NAME}" \
             "release/portable/SmartOCR-Pro-windows-portable.zip" \
+            --clobber
+
+      - name: Upload installer release asset
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${GITHUB_REF_NAME}" \
+            "release/installer/SmartOCR-Pro-setup.exe" \
             --clobber
