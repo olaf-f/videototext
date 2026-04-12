@@ -509,11 +509,19 @@ export const useAppStore = defineStore('app', () => {
       }
 
       folderBatchProgressPercent.value = 100
-      folderBatchProgressCurrent.value = response.imageCount + 2
-      folderBatchProgressTotal.value = response.imageCount + 2
+      folderBatchProgressCurrent.value = folderBatchProgressTotal.value || response.imageCount
       folderBatchCurrentImageName.value = ''
+      const folderMdCount = Math.max(0, response.generatedFiles.length - 1)
+      pushFolderBatchLog(`子目录结果文件：${folderMdCount} 个`)
+      response.generatedFiles
+        .filter((path) => path !== response.consolidatedMdPath)
+        .slice(0, 12)
+        .forEach((path) => pushFolderBatchLog(`目录文件：${path}`))
+      if (folderMdCount > 12) {
+        pushFolderBatchLog(`目录文件较多，已省略 ${folderMdCount - 12} 条路径日志。`)
+      }
       pushFolderBatchLog(`汇总 Markdown 文件：${response.consolidatedMdPath}`)
-      statusMessage.value = `文件夹批处理完成：共 ${response.imageCount} 张图片，已输出 1 个 Markdown 文件。`
+      statusMessage.value = `文件夹批处理完成：共 ${response.imageCount} 张图片，已生成 ${folderMdCount} 个目录文件 + 1 个根目录总文件。`
     })
   }
 

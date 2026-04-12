@@ -403,7 +403,7 @@ onBeforeUnmount(() => {
           </li>
         </ul>
       </div>
-      <p class="flow-tip">执行后仅在所选文件夹输出 1 个 Markdown 文件，整合全部图片 OCR 与 AI 结果。</p>
+      <p class="flow-tip">执行后会在每个图片目录生成 1 个 Markdown，并在根目录额外生成 1 个总 Markdown（提示词仅展示一次）。</p>
       <p v-if="props.batchProcessing" class="summary-muted">正在批处理，请稍候...</p>
     </div>
 
