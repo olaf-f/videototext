@@ -9,6 +9,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             commands::ai::structure_text_with_deepseek,
+            commands::batch::process_image_folder,
             commands::export::normalize_export_filename,
             commands::export::save_text_export,
             commands::settings::load_settings,

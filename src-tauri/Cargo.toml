@@ -21,6 +21,7 @@ tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
 thiserror = "2"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+walkdir = "2"
 
 [lib]
 name = "smartocr_pro"

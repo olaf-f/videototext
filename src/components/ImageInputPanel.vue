@@ -14,6 +14,12 @@ const MAX_UPLOAD_IMAGES = 30
 
 const props = defineProps<{
   activeImages: ActiveImageSource[]
+  batchCurrentImageName: string
+  batchFolderPath: string
+  batchLogs: string[]
+  batchProcessing: boolean
+  batchProgressLabel: string
+  batchProgressPercent: number
   busy: boolean
   pipelineBusy: boolean
   showUrlImport: boolean
@@ -26,6 +32,7 @@ const emit = defineEmits<{
   'lock-url-import': []
   'open-settings': []
   'open-web-portal': []
+  'run-folder-batch': []
   'run-pipeline': []
   'set-preview-index': [index: number]
   'update:url-input': [value: string]
@@ -365,9 +372,39 @@ onBeforeUnmount(() => {
       <button class="primary-button" type="button" :disabled="busy" @click="openPicker">
         选择图片（弹窗管理）
       </button>
+      <button class="secondary-button" type="button" :disabled="busy" @click="emit('run-folder-batch')">
+        选择文件夹批处理
+      </button>
       <button v-if="showUrlImport" class="secondary-button" type="button" :disabled="busy" @click="emit('open-web-portal')">
         打开网页 OCR
       </button>
+    </div>
+
+    <div class="folder-batch-card">
+      <div class="folder-batch-header">
+        <p class="summary-label">文件夹批处理</p>
+        <span class="meta-chip">{{ props.batchProgressPercent }}%</span>
+      </div>
+      <p class="summary-muted">
+        {{ props.batchFolderPath ? `已选择：${props.batchFolderPath}` : '尚未选择文件夹。' }}
+      </p>
+      <div class="folder-progress-track" role="progressbar" :aria-valuenow="props.batchProgressPercent" aria-valuemin="0" aria-valuemax="100">
+        <div class="folder-progress-fill" :style="{ width: `${props.batchProgressPercent}%` }" />
+      </div>
+      <p class="summary-muted">
+        {{ props.batchProgressLabel ? `进度：${props.batchProgressLabel}` : '进度：等待执行' }}
+        <template v-if="props.batchCurrentImageName">，当前：{{ props.batchCurrentImageName }}</template>
+      </p>
+      <div class="folder-batch-log">
+        <p v-if="!props.batchLogs.length" class="summary-muted">日志将在执行时实时显示。</p>
+        <ul v-else class="folder-batch-log-list">
+          <li v-for="(line, index) in props.batchLogs" :key="`${index}-${line}`">
+            {{ line }}
+          </li>
+        </ul>
+      </div>
+      <p class="flow-tip">执行后仅在所选文件夹输出 1 个 Markdown 文件，整合全部图片 OCR 与 AI 结果。</p>
+      <p v-if="props.batchProcessing" class="summary-muted">正在批处理，请稍候...</p>
     </div>
 
     <div

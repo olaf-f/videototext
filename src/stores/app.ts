@@ -1,10 +1,14 @@
 ﻿import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
+import { listen, type UnlistenFn } from '@tauri-apps/api/event'
+import { open } from '@tauri-apps/plugin-dialog'
 import { openUrl } from '@tauri-apps/plugin-opener'
 
 import {
+  type FolderBatchProgressEvent,
   importImageFromUrl,
   loadSettings,
+  processImageFolder,
   runOcr as invokeRunOcr,
   saveDeepseekApiKey as invokeSaveDeepseekApiKey,
   saveSettings as invokeSaveSettings,
@@ -75,8 +79,23 @@ export const useAppStore = defineStore('app', () => {
   const urlInput = ref('')
   const urlImportLocked = ref(false)
   const operationToken = ref(0)
+  const folderBatchPath = ref('')
+  const folderBatchProgressPercent = ref(0)
+  const folderBatchProgressCurrent = ref(0)
+  const folderBatchProgressTotal = ref(0)
+  const folderBatchCurrentImageName = ref('')
+  const folderBatchLogs = ref<string[]>([])
+  let folderBatchUnlisten: UnlistenFn | null = null
 
   const activeImage = computed(() => activeImages.value[currentImageIndex.value] ?? null)
+  const folderBatchProgressLabel = computed(() => {
+    const current = folderBatchProgressCurrent.value
+    const total = folderBatchProgressTotal.value
+    if (total > 0) {
+      return `${current}/${total}`
+    }
+    return ''
+  })
 
   const busyLabel = computed(() => {
     switch (busyState.value) {
@@ -88,6 +107,8 @@ export const useAppStore = defineStore('app', () => {
         return '正在进行 AI 结构化...'
       case 'pipeline':
         return '正在执行一键流程...'
+      case 'folder-batch':
+        return '正在执行文件夹批处理...'
       case 'settings':
         return '正在保存设置...'
       case 'export':
@@ -171,6 +192,35 @@ export const useAppStore = defineStore('app', () => {
     urlImportLocked.value = true
   }
 
+  function clearFolderBatchMode() {
+    folderBatchPath.value = ''
+    resetFolderBatchProgress()
+  }
+
+  function resetFolderBatchProgress() {
+    folderBatchProgressPercent.value = 0
+    folderBatchProgressCurrent.value = 0
+    folderBatchProgressTotal.value = 0
+    folderBatchCurrentImageName.value = ''
+    folderBatchLogs.value = []
+  }
+
+  function pushFolderBatchLog(message: string) {
+    const trimmed = message.trim()
+    if (!trimmed) {
+      return
+    }
+    folderBatchLogs.value = [...folderBatchLogs.value.slice(-119), trimmed]
+  }
+
+  function applyFolderBatchProgress(payload: FolderBatchProgressEvent) {
+    folderBatchProgressPercent.value = Math.max(0, Math.min(payload.percent ?? 0, 100))
+    folderBatchProgressCurrent.value = payload.current ?? 0
+    folderBatchProgressTotal.value = payload.total ?? 0
+    folderBatchCurrentImageName.value = payload.currentImageName ?? ''
+    pushFolderBatchLog(payload.message || '')
+  }
+
   function openSettings() {
     isSettingsOpen.value = true
   }
@@ -251,6 +301,12 @@ export const useAppStore = defineStore('app', () => {
     }
 
     try {
+      folderBatchUnlisten = await listen<FolderBatchProgressEvent>(
+        'folder-batch-progress',
+        (event) => {
+          applyFolderBatchProgress(event.payload)
+        },
+      )
       const loadedSettings = await loadSettings()
       settings.value = loadedSettings
       promptInput.value = loadedSettings.defaultPrompt || defaultSettings.defaultPrompt
@@ -269,6 +325,7 @@ export const useAppStore = defineStore('app', () => {
 
   async function importFromFiles(files: File[]) {
     await withBusy('import', async () => {
+      clearFolderBatchMode()
       const onlyImages = files.filter((file) => file.type.startsWith('image/'))
       if (!onlyImages.length) {
         throw new Error('未检测到可用图片文件。')
@@ -299,6 +356,7 @@ export const useAppStore = defineStore('app', () => {
   async function importFromUrl(rawUrl: string) {
     const nextUrl = rawUrl.trim()
     await withBusy('import', async () => {
+      clearFolderBatchMode()
       if (!nextUrl) {
         throw new Error('请先输入图片直链 URL。')
       }
@@ -381,6 +439,81 @@ export const useAppStore = defineStore('app', () => {
       }
 
       statusMessage.value = `一键流程完成：共 ${images.length} 张图片。`
+    })
+  }
+
+  async function runFolderBatchFromDialog() {
+    const selected = await open({
+      directory: true,
+      multiple: false,
+      title: '选择待递归处理的图片文件夹',
+    })
+
+    if (!selected) {
+      return
+    }
+
+    if (Array.isArray(selected)) {
+      if (!selected[0]) {
+        return
+      }
+      await runFolderBatch(selected[0])
+      return
+    }
+
+    await runFolderBatch(selected)
+  }
+
+  async function runFolderBatch(folderPath: string) {
+    const trimmedPath = folderPath.trim()
+    if (!trimmedPath) {
+      throw new Error('请选择有效文件夹。')
+    }
+
+    await withBusy('folder-batch', async () => {
+      resetFolderBatchProgress()
+      folderBatchPath.value = trimmedPath
+      statusMessage.value = '正在执行文件夹批处理...'
+
+      const response = await processImageFolder({
+        folderPath: trimmedPath,
+        prompt: promptInput.value.trim() || settings.value.defaultPrompt,
+      })
+
+      const mappedItems: OcrResultItem[] = response.ocrItems.map((item) => ({
+        order: item.order,
+        sourceId: item.sourcePath,
+        displayName: item.displayName,
+        text: item.text,
+        durationMs: item.durationMs,
+      }))
+
+      ocrResult.value = {
+        items: mappedItems,
+        text: response.mergedOcrText,
+        durationMs: mappedItems.reduce((sum, item) => sum + item.durationMs, 0),
+      }
+
+      aiResult.value = {
+        markdown: response.aiMarkdown,
+        durationMs: response.aiDurationMs,
+        sourceIds: mappedItems.map((item) => item.sourceId),
+      }
+
+      if (response.aiMarkdown.trim()) {
+        accumulatorMarkdown.value = appendAccumulatorSection(
+          accumulatorMarkdown.value,
+          'AI 结构化结果（文件夹全量分析）',
+          response.aiMarkdown,
+        )
+      }
+
+      folderBatchProgressPercent.value = 100
+      folderBatchProgressCurrent.value = response.imageCount + 2
+      folderBatchProgressTotal.value = response.imageCount + 2
+      folderBatchCurrentImageName.value = ''
+      pushFolderBatchLog(`汇总 Markdown 文件：${response.consolidatedMdPath}`)
+      statusMessage.value = `文件夹批处理完成：共 ${response.imageCount} 张图片，已输出 1 个 Markdown 文件。`
     })
   }
 
@@ -499,6 +632,10 @@ export const useAppStore = defineStore('app', () => {
   }
 
   function dispose() {
+    if (folderBatchUnlisten) {
+      folderBatchUnlisten()
+      folderBatchUnlisten = null
+    }
     revokePreviewUrls(activeImages.value)
   }
 
@@ -519,6 +656,11 @@ export const useAppStore = defineStore('app', () => {
     exportAccumulator,
     exportAiResult,
     exportOcrResult,
+    folderBatchCurrentImageName,
+    folderBatchLogs,
+    folderBatchPath,
+    folderBatchProgressLabel,
+    folderBatchProgressPercent,
     importFromFiles,
     importFromUrl,
     initialize,
@@ -529,6 +671,7 @@ export const useAppStore = defineStore('app', () => {
     openWebPortal,
     promptInput,
     runAi,
+    runFolderBatchFromDialog,
     runOcr,
     runPipeline,
     reorderActiveImages,

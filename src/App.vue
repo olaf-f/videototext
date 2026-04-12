@@ -21,6 +21,11 @@ const {
   busyState,
   currentImageIndex,
   errorMessage,
+  folderBatchCurrentImageName,
+  folderBatchLogs,
+  folderBatchPath,
+  folderBatchProgressLabel,
+  folderBatchProgressPercent,
   isSettingsOpen,
   ocrResult,
   promptInput,
@@ -33,8 +38,14 @@ const {
 
 const isAnyBusy = computed(() => Boolean(busyState.value))
 const isPipelineBusy = computed(() => busyState.value === 'pipeline')
+const isFolderBatchBusy = computed(() => busyState.value === 'folder-batch')
 const isSettingsBusy = computed(() => busyState.value === 'settings')
-const showUrlImport = computed(() => !urlImportLocked.value)
+const showUrlImport = computed(
+  () =>
+    !urlImportLocked.value &&
+    !isFolderBatchBusy.value &&
+    !folderBatchPath.value.trim(),
+)
 
 function onReorderImages(payload: { fromIndex: number; toIndex: number }) {
   appStore.reorderActiveImages(payload.fromIndex, payload.toIndex)
@@ -78,6 +89,12 @@ onBeforeUnmount(() => {
       <ImageInputPanel
         :active-images="activeImages"
         :busy="isAnyBusy"
+        :batch-current-image-name="folderBatchCurrentImageName"
+        :batch-folder-path="folderBatchPath"
+        :batch-logs="folderBatchLogs"
+        :batch-processing="isFolderBatchBusy"
+        :batch-progress-label="folderBatchProgressLabel"
+        :batch-progress-percent="folderBatchProgressPercent"
         :pipeline-busy="isPipelineBusy"
         :show-url-import="showUrlImport"
         :url-input="urlInput"
@@ -86,6 +103,7 @@ onBeforeUnmount(() => {
         @lock-url-import="appStore.lockUrlImport()"
         @open-settings="appStore.openSettings()"
         @open-web-portal="appStore.openWebPortal()"
+        @run-folder-batch="appStore.runFolderBatchFromDialog()"
         @run-pipeline="appStore.runPipeline()"
         @set-preview-index="appStore.setCurrentImageIndex"
         @update:url-input="appStore.setUrlInput"

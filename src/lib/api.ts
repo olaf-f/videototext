@@ -51,6 +51,44 @@ type ImportImageFromUrlResponse = {
   imageBytes: number[]
 }
 
+type ProcessImageFolderRequest = {
+  folderPath: string
+  prompt: string
+  assetRoot?: string
+  model?: string
+  apiUrl?: string
+}
+
+export type FolderBatchProgressEvent = {
+  stage: 'scan' | 'ocr' | 'ai' | 'done' | 'error'
+  current: number
+  total: number
+  percent: number
+  currentImageName: string | null
+  message: string
+  level: 'info' | 'success' | 'error'
+}
+
+export type FolderBatchOcrItem = {
+  order: number
+  sourcePath: string
+  displayName: string
+  text: string
+  durationMs: number
+}
+
+type ProcessImageFolderResponse = {
+  folderPath: string
+  imageCount: number
+  ocrItems: FolderBatchOcrItem[]
+  mergedOcrText: string
+  aiMarkdown: string
+  consolidatedMdPath: string
+  generatedFiles: string[]
+  totalDurationMs: number
+  aiDurationMs: number
+}
+
 export async function loadSettings(): Promise<AppSettings> {
   return invoke<AppSettings>('load_settings')
 }
@@ -99,4 +137,10 @@ export async function saveTextExport(
   request: SaveTextExportRequest,
 ): Promise<SaveTextExportResponse> {
   return invoke<SaveTextExportResponse>('save_text_export', { request })
+}
+
+export async function processImageFolder(
+  request: ProcessImageFolderRequest,
+): Promise<ProcessImageFolderResponse> {
+  return invoke<ProcessImageFolderResponse>('process_image_folder', { request })
 }

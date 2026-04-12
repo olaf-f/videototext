@@ -1,7 +1,15 @@
 ﻿import type { ExportExtension } from './export'
 
 export type ImageSourceType = 'clipboard' | 'file' | 'url'
-export type BusyState = 'ai' | 'export' | 'import' | 'ocr' | 'pipeline' | 'settings' | null
+export type BusyState =
+  | 'ai'
+  | 'export'
+  | 'folder-batch'
+  | 'import'
+  | 'ocr'
+  | 'pipeline'
+  | 'settings'
+  | null
 
 export type ActiveImageSource = {
   id: string
